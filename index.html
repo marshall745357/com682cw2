@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>COM682 CW2 — Logic App CRUD Demo</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 24px; }
+      h1 { margin: 0 0 8px; }
+      .muted { color: #666; margin: 0 0 16px; }
+      .grid { display: grid; gap: 12px; grid-template-columns: 1fr; max-width: 920px; }
+      .card { border: 1px solid #ddd; border-radius: 10px; padding: 14px; }
+      label { display:block; font-size: 12px; color:#444; margin: 10px 0 4px; }
+      input, textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 8px; }
+      textarea { min-height: 80px; resize: vertical; }
+      .row { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      button { padding: 10px 12px; border: 0; border-radius: 8px; cursor: pointer; }
+      button.primary { background: #2563eb; color: white; }
+      button.secondary { background: #e5e7eb; color: #111827; }
+      button.danger { background: #dc2626; color: white; }
+      .buttons { display:flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+      pre { background: #0b1020; color: #e5e7eb; padding: 12px; border-radius: 10px; overflow:auto; }
+      small { color:#666; }
+      .warn { color:#b45309; }
+    </style>
+  </head>
+  <body>
+    <h1>COM682 CW2 — Logic App CRUD Demo</h1>
+    <p class="muted">Paste your Logic App trigger URLs below, then use the buttons to test CRUD.</p>
+
+    <div class="grid">
+      <div class="card">
+        <h2 style="margin:0 0 8px;">1) Endpoint URLs</h2>
+        <p class="muted" style="margin:0 0 8px;">
+          Tip: Your Logic App triggers are usually <b>POST</b>. This page calls them with POST (even for “GET”/“DELETE” style endpoints).
+        </p>
+
+        <label>Create (POST)</label>
+        <input id="urlCreate" placeholder="Paste CREATE trigger URL" />
+
+        <label>List (GET all) — (POST trigger)</label>
+        <input id="urlList" placeholder="Paste LIST trigger URL" />
+
+        <label>Get One (by id) — (POST trigger)</label>
+        <input id="urlGetOne" placeholder="Paste GET-ONE trigger URL" />
+
+        <label>Update (by id) — (POST trigger)</label>
+        <input id="urlUpdate" placeholder="Paste UPDATE trigger URL" />
+
+        <label>Delete (by id) — (POST trigger)</label>
+        <input id="urlDelete" placeholder="Paste DELETE trigger URL" />
+
+        <div class="buttons">
+          <button class="secondary" id="btnSaveUrls">Save URLs (local)</button>
+          <button class="secondary" id="btnLoadUrls">Load URLs</button>
+          <button class="secondary" id="btnClearUrls">Clear</button>
+        </div>
+        <small class="warn">If a trigger URL already contains <code>&id=...</code>, remove it. This page appends <code>&id=</code> itself.</small>
+      </div>
+
+      <div class="card">
+        <h2 style="margin:0 0 8px;">2) Create Item (uploads a file)</h2>
+
+        <div class="row">
+          <div>
+            <label>Name</label>
+            <input id="name" value="X32" />
+          </div>
+          <div>
+            <label>Category</label>
+            <input id="category" value="Mixer" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label>Manufacturer</label>
+            <input id="manufacturer" value="Behringer" />
+          </div>
+          <div>
+            <label>File</label>
+            <input id="file" type="file" />
+          </div>
+        </div>
+
+        <label>Description</label>
+        <textarea id="description">Created from CW2 demo page</textarea>
+
+        <div class="buttons">
+          <button class="primary" id="btnCreate">Create</button>
+        </div>
+
+        <small>After create, the returned <code>id</code> will be copied into the “Item ID” field below.</small>
+      </div>
+
+      <div class="card">
+        <h2 style="margin:0 0 8px;">3) Read / Update / Delete</h2>
+
+        <label>Item ID</label>
+        <input id="itemId" placeholder="Paste an item id (GUID) here" />
+
+        <div class="buttons">
+          <button class="secondary" id="btnList">List All</button>
+          <button class="secondary" id="btnGetOne">Get One</button>
+          <button class="secondary" id="btnUpdate">Update (metadata)</button>
+          <button class="danger" id="btnDelete">Delete</button>
+        </div>
+
+        <small>
+          Update uses the fields from the Create form (name/category/manufacturer/description) and sends only metadata (no file).
+        </small>
+      </div>
+
+      <div class="card">
+        <h2 style="margin:0 0 8px;">Output</h2>
+        <pre id="out">Ready.</pre>
+      </div>
+    </div>
+
+    <script>
+      const out = document.getElementById("out");
+
+      const els = {
+        urlCreate: document.getElementById("urlCreate"),
+        urlList: document.getElementById("urlList"),
+        urlGetOne: document.getElementById("urlGetOne"),
+        urlUpdate: document.getElementById("urlUpdate"),
+        urlDelete: document.getElementById("urlDelete"),
+        name: document.getElementById("name"),
+        category: document.getElementById("category"),
+        manufacturer: document.getElementById("manufacturer"),
+        description: document.getElementById("description"),
+        file: document.getElementById("file"),
+        itemId: document.getElementById("itemId"),
+      };
+
+      function log(obj) {
+        out.textContent = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
+      }
+
+      function saveUrls() {
+        const data = {
+          create: els.urlCreate.value.trim(),
+          list: els.urlList.value.trim(),
+          getOne: els.urlGetOne.value.trim(),
+          update: els.urlUpdate.value.trim(),
+          del: els.urlDelete.value.trim(),
+        };
+        localStorage.setItem("cw2_urls", JSON.stringify(data));
+        log({ ok: true, saved: data });
+      }
+
+      function loadUrls() {
+        const raw = localStorage.getItem("cw2_urls");
+        if (!raw) return log("No saved URLs found.");
+        const data = JSON.parse(raw);
+        els.urlCreate.value = data.create || "";
+        els.urlList.value = data.list || "";
+        els.urlGetOne.value = data.getOne || "";
+        els.urlUpdate.value = data.update || "";
+        els.urlDelete.value = data.del || "";
+        log({ ok: true, loaded: data });
+      }
+
+      function clearUrls() {
+        els.urlCreate.value = "";
+        els.urlList.value = "";
+        els.urlGetOne.value = "";
+        els.urlUpdate.value = "";
+        els.urlDelete.value = "";
+        localStorage.removeItem("cw2_urls");
+        log("Cleared.");
+      }
+
+      async function fileToBase64(file) {
+        const dataUrl = await new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(r.result);
+          r.onerror = reject;
+          r.readAsDataURL(file);
+        });
+        return String(dataUrl).split(",")[1];
+      }
+
+      async function postJson(url, body) {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+
+        const text = await res.text().catch(() => "");
+        let data;
+        try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: ${typeof data === "string" ? data : JSON.stringify(data)}`);
+        }
+
+        return data;
+      }
+
+      function withId(url, id) {
+        const clean = url.trim();
+        if (!clean) return "";
+        const sep = clean.includes("?") ? "&" : "?";
+        return clean + sep + "id=" + encodeURIComponent(id);
+      }
+
+      async function createItem() {
+        const url = els.urlCreate.value.trim();
+        if (!url) return log("Paste CREATE URL first.");
+
+        const file = els.file.files[0];
+        if (!file) return log("Pick a file first.");
+
+        log("Creating (uploading file)...");
+        const payload = {
+          name: els.name.value.trim(),
+          category: els.category.value.trim(),
+          manufacturer: els.manufacturer.value.trim(),
+          description: els.description.value.trim(),
+          fileName: file.name,
+          contentType: file.type || "application/octet-stream",
+          fileBase64: await fileToBase64(file),
+        };
+
+        const created = await postJson(url, payload);
+        log(created);
+
+        if (created && created.id) els.itemId.value = created.id;
+      }
+
+      async function listItems() {
+        const url = els.urlList.value.trim();
+        if (!url) return log("Paste LIST URL first.");
+        log("Listing...");
+        const data = await postJson(url, {});
+        log(data);
+      }
+
+      async function getOne() {
+        const url = els.urlGetOne.value.trim();
+        const id = els.itemId.value.trim();
+        if (!url) return log("Paste GET-ONE URL first.");
+        if (!id) return log("Enter an Item ID.");
+        log("Getting one...");
+        const data = await postJson(withId(url, id), {});
+        log(data);
+      }
+
+      async function updateItem() {
+        const url = els.urlUpdate.value.trim();
+        const id = els.itemId.value.trim();
+        if (!url) return log("Paste UPDATE URL first.");
+        if (!id) return log("Enter an Item ID.");
+        log("Updating...");
+        const payload = {
+          name: els.name.value.trim(),
+          category: els.category.value.trim(),
+          manufacturer: els.manufacturer.value.trim(),
+          description: els.description.value.trim(),
+        };
+        const data = await postJson(withId(url, id), payload);
+        log(data);
+      }
+
+      async function deleteItem() {
+        const url = els.urlDelete.value.trim();
+        const id = els.itemId.value.trim();
+        if (!url) return log("Paste DELETE URL first.");
+        if (!id) return log("Enter an Item ID.");
+        log("Deleting...");
+        const data = await postJson(withId(url, id), {});
+        log(data);
+      }
+
+      document.getElementById("btnSaveUrls").onclick = saveUrls;
+      document.getElementById("btnLoadUrls").onclick = loadUrls;
+      document.getElementById("btnClearUrls").onclick = clearUrls;
+
+      document.getElementById("btnCreate").onclick = () => createItem().catch(e => log(String(e)));
+      document.getElementById("btnList").onclick = () => listItems().catch(e => log(String(e)));
+      document.getElementById("btnGetOne").onclick = () => getOne().catch(e => log(String(e)));
+      document.getElementById("btnUpdate").onclick = () => updateItem().catch(e => log(String(e)));
+      document.getElementById("btnDelete").onclick = () => deleteItem().catch(e => log(String(e)));
+
+      loadUrls();
+    </script>
+  </body>
+</html>
