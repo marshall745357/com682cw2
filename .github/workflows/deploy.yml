@@ -1,0 +1,24 @@
+name: Deploy to Azure Storage Static Website
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Azure CLI
+        run: curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+
+      - name: Upload to $web
+        env:
+          AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_STORAGE_CONNECTION_STRING }}
+        run: |
+          az storage blob upload-batch \
+            --connection-string "$AZURE_STORAGE_CONNECTION_STRING" \
+            --destination '$web' \
+            --source . \
+            --overwr ite
